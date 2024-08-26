@@ -68,6 +68,28 @@ resource "helm_release" "ingress" {
   create_namespace = true
   version          = var.nginx_ingress_version
 
+  set {
+    name  = "controller.enableLatencyMetrics"
+    value = true
+  }
+
+  set {
+    name  = "controller.metrics.enabled"
+    value = true
+  }
+
+  set {
+    name  = "controller.metrics.service.annotations.prometheus\\.io/scrape"
+    value = "true"
+    type  = "string"
+  }
+
+  set {
+    name  = "controller.metrics.service.annotations.prometheus\\.io/port"
+    value = "10254"
+    type  = "string"
+  }
+
   wait = true
   depends_on = [
     aws_eks_cluster.cluster
