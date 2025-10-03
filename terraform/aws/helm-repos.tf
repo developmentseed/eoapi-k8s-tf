@@ -44,14 +44,14 @@ resource "helm_release" "autoscaler" {
 }
 
 resource "helm_release" "efs_storage_class" {
-  count            = var.enable_efs ? 1: 0
+  count            = var.enable_efs ? 1 : 0
   name             = "efs-storage-class"
   chart            = "../../helm-charts/efs-storage-class"
   create_namespace = false
 
   set {
     name  = "efsFileSystemId"
-    value = "${aws_efs_file_system.efs[0].id}"
+    value = aws_efs_file_system.efs[0].id
   }
 
   wait = true
@@ -180,14 +180,29 @@ resource "helm_release" "prometheus" {
 
 
 resource "helm_release" "metrics-server" {
-  count            = var.enable_support_helm_charts ? 1 : 0
-  name             = "metrics-server"
-  repository       = "https://charts.bitnami.com/bitnami"
-  chart            = "metrics-server"
-  version          = var.metrics_server_version
-  namespace        = "kube-system"
+  count      = var.enable_support_helm_charts ? 1 : 0
+  name       = "metrics-server"
+  repository = "https://charts.bitnami.com/bitnami"
+  chart      = "metrics-server"
+  version    = var.metrics_server_version
+  namespace  = "kube-system"
 
   wait = true
+
+  set = [
+    {
+      name  = "image.registry"
+      value = "docker.io"
+    },
+    {
+      name  = "image.repository"
+      value = "bitnamilegacy/metrics-server"
+    },
+    {
+      name  = "image.tag"
+      value = "0.8.0-debian-12-r4"
+    }
+  ]
 
   depends_on = [
     aws_eks_cluster.cluster
