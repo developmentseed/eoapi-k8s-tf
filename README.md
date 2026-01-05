@@ -1,5 +1,6 @@
-# eoapi-k8s-terraform
-Terraform templates and kubernetes manifests to deploy k8s clusters on AWS, GCP, Azure, OpenTelekom
+# eoapi-k8s-tf
+
+OpenTofu/Terraform templates for several cloud providers.
 
 ## AWS
 
