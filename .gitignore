@@ -1,0 +1,49 @@
+# Terraform / OpenTofu
+.terraform*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!example.tfvars
+!example.vars.tfvars
+*.tfplan
+*plan
+!scripts/plan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Backend configs (may contain sensitive data)
+backend-configs/*.tfbackend
+!backend-configs/example.tfbackend
+
+# State configs
+*state.config
+!example.state.config
+
+# Specific backup files
+infra/terraform.tfstate.backup
+
+# Kubeconfig outputs
+kubeconfig*.yaml
+*.kubeconfig
+
+# Python
+__pycache__
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+ovh-creds.sh

@@ -1,11 +1,9 @@
 # eoapi-k8s-tf
 
-OpenTofu/Terraform templates for several cloud providers.
+OpenTofu/Terraform templates for several cloud providers to prepare Kubernetes clusters for [eoapi-k8s](https://github.com/developmentseed/eoapi-k8s).
 
-## AWS
+## Providers
 
-See the [AWS docs](./docs/aws.md)
-
-## GCP
-
-See the [GCP docs](./docs/gcp.md)
+- [AWS](./docs/aws.md)
+- [GCP](./docs/gcp.md)
+- [OVH](./docs/ovh.md)
