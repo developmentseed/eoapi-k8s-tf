@@ -1,44 +1,148 @@
-### Terraform Installation
-0. cd terraform/gcp
+# Google Kubernetes Engine (GKE)
 
-1. install `tfenv` to manage multiple versions: [https://github.com/tfutils/tfenv](https://github.com/tfutils/tfenv)
+Terraform configuration for GKE with autoscaling for load testing.
 
-2. our `main.tf` file has a `required_version = "1.7.4"` so install that:
-   ```bash
-   $ tfenv list
-    1.1.5
-    1.1.4
-   ```
+## Prerequisites
 
-3. `tfenv install 1.7.4`
+1. **Google Cloud Project** - With billing enabled
+2. **gcloud CLI** - Configured with credentials ([install](https://cloud.google.com/sdk/docs/install))
+3. **Terraform** - Version 1.7.4+ ([install with tfenv](https://github.com/tfutils/tfenv))
 
-4. `tfenv use 1.7.4`
+## Quick Start
 
-### Authenticate with Gcloud CLI
+### 1. Install Terraform
 
-0. https://cloud.google.com/docs/authentication/gcloud
+```bash
+# Install tfenv
+tfenv install 1.7.4
+tfenv use 1.7.4
+```
 
-###  Terraform Init and Workspaces
+### 2. Authenticate with GCP
 
-0. choose a name for your project that you'll use for the TF `workspace` name, variable filename and backend-config name. 
-for the purposes of the rest of this walkthrough we'll call it `example-dev`  
+```bash
+# Authenticate with your Google account
+gcloud auth application-default login
 
-1. copy the `backend-configs/example.tfbackend` to `backend-cofnigs/example-dev.tfbackend`. this is the file that sets
-up where your terraform state will be used in s3
+# Set your project
+gcloud config set project your-project-id
+```
 
-2. in that file change the `bucket` value to be a unique bucket name. Leave the `key = terraform` as is. Choose a `region` for your bucket
+### 3. Configure Backend
 
-3. create the s3 bucket manually or via `aws-cli` for that region and bucket name
+```bash
+cd terraform/gcp
 
-4. initialize terraform and the state: `terraform init -reconfigure -backend-config backend-configs/example-dev.tfbackend `
+# Choose a workspace name (e.g., example-dev)
+cp backend-configs/example.tfbackend backend-configs/example-dev.tfbackend
 
-5. finally, create a workspace `terraform workspace create example-dev`
+# Edit backend-configs/example-dev.tfbackend:
+# - Set unique bucket name
+# - Leave prefix = terraform
+```
 
+### 4. Create GCS Backend
 
-### Terraform Plan and Apply
+```bash
+# Create the GCS bucket for terraform state
+gsutil mb -l us-central1 gs://your-unique-bucket-name
+```
 
-0. cp `vars/example.tfvars` to your `vars/example-dev.tfvars` and make the changes you will need
+### 5. Initialize Terraform
 
-1. `terraform plan --var-file=vars/example-dev.tfvars`
+```bash
+terraform init -reconfigure -backend-config backend-configs/example-dev.tfbackend
+terraform workspace new example-dev
+```
 
-3. `terraform apply --var-file=vars/example-dev.tfvars`
+### 6. Configure Variables
+
+```bash
+cp vars/example.tfvars vars/example-dev.tfvars
+# Edit vars/example-dev.tfvars with your configuration
+```
+
+### 7. Deploy
+
+```bash
+terraform plan --var-file=vars/example-dev.tfvars
+terraform apply --var-file=vars/example-dev.tfvars
+```
+
+### 8. Get kubeconfig
+
+```bash
+gcloud container clusters get-credentials your-cluster-name --region your-region
+kubectl get nodes
+```
+
+## Configuration
+
+### Essential Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `project_id` | GCP project ID | *required* |
+| `cluster_name` | GKE cluster name | `eoapi` |
+| `region` | GCP region | `us-central1` |
+| `machine_type` | Machine type | `e2-medium` |
+| `min_nodes` | Minimum nodes | `1` |
+| `max_nodes` | Maximum nodes (autoscaling) | `10` |
+| `initial_nodes` | Initial node count | `2` |
+
+### Machine Types for Load Testing
+
+| Type | vCPU | RAM | Best For |
+|------|------|-----|----------|
+| `e2-medium` | 2 | 4GB | Small workloads, dev/test |
+| `e2-standard-2` | 2 | 8GB | Medium workloads |
+| `e2-standard-4` | 4 | 16GB | Large workloads |
+| `n2-standard-2` | 2 | 8GB | Balanced compute |
+
+## Features
+
+- **GKE Autopilot/Standard** - Managed Kubernetes control plane
+- **Autoscaling** - Nodes scale from `min_nodes` to `max_nodes`
+- **VPC-native** - IP aliasing for efficient networking
+- **Workload Identity** - Secure GCP service access from pods
+- **Cloud Monitoring** - Integrated observability
+
+## Outputs
+
+```bash
+terraform output cluster_name      # GKE cluster name
+terraform output cluster_endpoint  # Kubernetes API URL
+terraform output cluster_region    # GCP region
+```
+
+## Troubleshooting
+
+**Check cluster status:**
+```bash
+gcloud container clusters describe your-cluster-name --region your-region
+kubectl get nodes
+```
+
+**View autoscaling:**
+```bash
+kubectl top nodes
+kubectl get nodes -o wide
+```
+
+**Authentication issues:**
+```bash
+gcloud container clusters get-credentials your-cluster-name --region your-region
+```
+
+## Cleanup
+
+```bash
+terraform destroy --var-file=vars/example-dev.tfvars
+```
+
+## Cost Optimization
+
+- Start with `e2-medium` nodes (cost-effective)
+- Set `min_nodes = 1` to minimize idle costs
+- Autoscaling ensures you only pay for active nodes
+- Delete cluster when not testing: `terraform destroy`

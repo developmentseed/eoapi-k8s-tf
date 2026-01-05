@@ -1,40 +1,138 @@
-### Terraform Installation
-0. cd terraform/aws
+# AWS Elastic Kubernetes Service (EKS)
 
-1. install `tfenv` to manage multiple versions: [https://github.com/tfutils/tfenv](https://github.com/tfutils/tfenv)
+Terraform configuration for AWS EKS with autoscaling for load testing.
 
-2. our `main.tf` file has a `required_version = "1.7.4"` so install that:
-   ```bash
-   $ tfenv list
-    1.1.5
-    1.1.4
-   ```
+## Prerequisites
 
-3. `tfenv install 1.7.4`
+1. **AWS Account** - With appropriate permissions for EKS, VPC, and IAM
+2. **AWS CLI** - Configured with credentials ([install](https://aws.amazon.com/cli/))
+3. **Terraform** - Version 1.7.4+ ([install with tfenv](https://github.com/tfutils/tfenv))
 
-4. `tfenv use 1.7.4`
+## Quick Start
 
-###  Terraform Init and Workspaces
+### 1. Install Terraform
 
-0. choose a name for your project that you'll use for the TF `workspace` name, variable filename and backend-config name. 
-for the purposes of the rest of this walkthrough we'll call it `example-dev`  
+```bash
+# Install tfenv
+tfenv install 1.7.4
+tfenv use 1.7.4
+```
 
-1. copy the `backend-configs/example.tfbackend` to `backend-cofnigs/example-dev.tfbackend`. this is the file that sets
-up where your terraform state will be used in s3
+### 2. Configure Backend
 
-2. in that file change the `bucket` value to be a unique bucket name. Leave the `key = terraform` as is. Choose a `region` for your bucket
+```bash
+cd terraform/aws
 
-3. create the s3 bucket manually or via `aws-cli` for that region and bucket name
+# Choose a workspace name (e.g., example-dev)
+cp backend-configs/example.tfbackend backend-configs/example-dev.tfbackend
 
-4. initialize terraform and the state: `AWS_PROFILE=(profile-name) terraform init -reconfigure -backend-config backend-configs/example-dev.tfbackend `
+# Edit backend-configs/example-dev.tfbackend:
+# - Set unique bucket name
+# - Choose AWS region
+# - Leave key = terraform
+```
 
-5. finally, create a workspace `AWS_PROFILE=(profile-name) terraform workspace create example-dev`
+### 3. Create S3 Backend
 
+```bash
+# Create the S3 bucket for terraform state
+aws s3 mb s3://your-unique-bucket-name --region us-east-1
+```
 
-### Terraform Plan and Apply
+### 4. Initialize Terraform
 
-0. cp `vars/example.tfvars` to your `vars/example-dev.tfvars` and make the changes you will need
+```bash
+AWS_PROFILE=your-profile terraform init -reconfigure -backend-config backend-configs/example-dev.tfbackend
+AWS_PROFILE=your-profile terraform workspace new example-dev
+```
 
-1. `AWS_PROFILE=(profile-name) terraform plan --var-file=vars/example-dev.tfvars`
+### 5. Configure Variables
 
-3. `AWS_PRFILE=(profile-name) terraform apply --var-file=vars/example-dev.tfvars`
+```bash
+cp vars/example.tfvars vars/example-dev.tfvars
+# Edit vars/example-dev.tfvars with your configuration
+```
+
+### 6. Deploy
+
+```bash
+AWS_PROFILE=your-profile terraform plan --var-file=vars/example-dev.tfvars
+AWS_PROFILE=your-profile terraform apply --var-file=vars/example-dev.tfvars
+```
+
+### 7. Get kubeconfig
+
+```bash
+aws eks update-kubeconfig --name your-cluster-name --region your-region --profile your-profile
+kubectl get nodes
+```
+
+## Configuration
+
+### Essential Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `cluster_name` | EKS cluster name | `eoapi` |
+| `region` | AWS region | `us-east-1` |
+| `instance_type` | EC2 instance type | `t3.medium` |
+| `min_nodes` | Minimum nodes | `1` |
+| `max_nodes` | Maximum nodes (autoscaling) | `10` |
+| `desired_nodes` | Initial node count | `2` |
+
+### Instance Types for Load Testing
+
+| Type | vCPU | RAM | Best For |
+|------|------|-----|----------|
+| `t3.medium` | 2 | 4GB | Small workloads, dev/test |
+| `t3.large` | 2 | 8GB | Medium workloads |
+| `t3.xlarge` | 4 | 16GB | Large workloads |
+| `m5.large` | 2 | 8GB | Balanced compute |
+
+## Features
+
+- **AWS EKS** - Managed Kubernetes control plane
+- **Autoscaling** - Nodes scale from `min_nodes` to `max_nodes`
+- **VPC** - Isolated network with public/private subnets
+- **IAM Integration** - IRSA for pod-level permissions
+- **Container Insights** - CloudWatch monitoring (optional)
+
+## Outputs
+
+```bash
+terraform output cluster_name      # EKS cluster name
+terraform output cluster_endpoint  # Kubernetes API URL
+terraform output cluster_region    # AWS region
+```
+
+## Troubleshooting
+
+**Check cluster status:**
+```bash
+AWS_PROFILE=your-profile aws eks describe-cluster --name your-cluster-name --region your-region
+kubectl get nodes
+```
+
+**View autoscaling:**
+```bash
+kubectl top nodes
+kubectl get nodes -o wide
+```
+
+**Authentication issues:**
+```bash
+aws eks update-kubeconfig --name your-cluster-name --region your-region --profile your-profile
+```
+
+## Cleanup
+
+```bash
+AWS_PROFILE=your-profile terraform destroy --var-file=vars/example-dev.tfvars
+```
+
+## Cost Optimization
+
+- Start with `t3.medium` nodes (cost-effective)
+- Set `min_nodes = 1` to minimize idle costs
+- Autoscaling ensures you only pay for active nodes
+- Delete cluster when not testing: `terraform destroy`
