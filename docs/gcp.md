@@ -1,44 +1,204 @@
-### Terraform Installation
-0. cd terraform/gcp
+# Google Cloud Platform (GCP) Managed Kubernetes
 
-1. install `tfenv` to manage multiple versions: [https://github.com/tfutils/tfenv](https://github.com/tfutils/tfenv)
+OpenTofu/Terraform configuration for Google Kubernetes Engine (GKE) with autoscaling node pools.
 
-2. our `main.tf` file has a `required_version = "1.7.4"` so install that:
+## Prerequisites
+
+1. **GCP Project**: Active Google Cloud Platform project
+2. **gcloud CLI**: Install from [cloud.google.com/sdk/install](https://cloud.google.com/sdk/install)
+3. **Authentication**: Set up credentials:
    ```bash
-   $ tfenv list
-    1.1.5
-    1.1.4
+   gcloud auth application-default login
+   gcloud config set project YOUR_PROJECT_ID
    ```
 
-3. `tfenv install 1.7.4`
+Useful information:
+- [GKE documentation](https://cloud.google.com/kubernetes-engine/docs)
+- [GCP authentication guide](https://cloud.google.com/docs/authentication/gcloud)
 
-4. `tfenv use 1.7.4`
+## Deployment
 
-### Authenticate with Gcloud CLI
+### 1. Configure Variables
 
-0. https://cloud.google.com/docs/authentication/gcloud
+```bash
+cd tf/gcp
+# Edit variables.tf or create terraform.tfvars
+```
 
-###  Terraform Init and Workspaces
+Required variables:
+```hcl
+gcp_project_id = "your-project-id"
+gcp_region     = "us-central1"      # Optional, has default
+gcp_zone       = "us-central1-f"    # Optional, has default
+```
 
-0. choose a name for your project that you'll use for the TF `workspace` name, variable filename and backend-config name. 
-for the purposes of the rest of this walkthrough we'll call it `example-dev`  
+### 2. Deploy Infrastructure
 
-1. copy the `backend-configs/example.tfbackend` to `backend-cofnigs/example-dev.tfbackend`. this is the file that sets
-up where your terraform state will be used in s3
+```bash
+tofu init
+tofu apply
+```
 
-2. in that file change the `bucket` value to be a unique bucket name. Leave the `key = terraform` as is. Choose a `region` for your bucket
+### 3. Access Cluster
 
-3. create the s3 bucket manually or via `aws-cli` for that region and bucket name
+```bash
+gcloud container clusters get-credentials k8seed-labs-cluster \
+  --zone=us-central1-f \
+  --project=YOUR_PROJECT_ID
 
-4. initialize terraform and the state: `terraform init -reconfigure -backend-config backend-configs/example-dev.tfbackend `
+kubectl get nodes
+```
 
-5. finally, create a workspace `terraform workspace create example-dev`
+### 4. Install eoAPI
 
+Install the PostgreSQL operator:
 
-### Terraform Plan and Apply
+```bash
+helm upgrade --install \
+  --set disable_check_for_upgrades=true pgo \
+  oci://registry.developers.crunchydata.com/crunchydata/pgo \
+  --version 5.7.4
+```
 
-0. cp `vars/example.tfvars` to your `vars/example-dev.tfvars` and make the changes you will need
+Add the eoAPI helm repository:
 
-1. `terraform plan --var-file=vars/example-dev.tfvars`
+```bash
+helm repo add eoapi https://devseed.com/eoapi-k8s/
+```
 
-3. `terraform apply --var-file=vars/example-dev.tfvars`
+Get your current git SHA:
+
+```bash
+export GITSHA=$(git rev-parse HEAD | cut -c1-10)
+```
+
+Install eoAPI:
+
+```bash
+helm upgrade --install \
+  --namespace eoapi \
+  --create-namespace \
+  --set gitSha=$GITSHA \
+  eoapi eoapi/eoapi
+```
+
+### 5. Access Services
+
+Get the ingress IP:
+
+```bash
+kubectl get svc -n ingress-nginx ingress-nginx-controller
+```
+
+Configure DNS to point to the `EXTERNAL-IP`.
+
+## Configuration
+
+### Essential Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `gcp_project_id` | GCP Project ID | *required* |
+| `gcp_region` | GCP region | `us-central1` |
+| `gcp_zone` | GCP zone | `us-central1-f` |
+| `gcp_node_image_type` | Node OS image | `ubuntu_containerd` |
+| `gcp_disk_size_gb` | Node disk size | `30` |
+
+### Node Pools
+
+**Generic Pool** (1-6 nodes):
+- Machine: `n1-standard-4` (4 vCPU, 15GB RAM)
+- Purpose: General workloads, API services
+
+**High-Memory Pool** (0-1 nodes):
+- Machine: `n1-highmem-8` (8 vCPU, 52GB RAM)
+- Purpose: Memory-intensive ingest jobs
+- Taint: `only-highmem-jobs=true:NO_SCHEDULE`
+
+### Machine Types
+
+| Type | vCPU | RAM | Use Case |
+|------|------|-----|----------|
+| `n1-standard-2` | 2 | 7.5GB | Development |
+| `n1-standard-4` | 4 | 15GB | Production |
+| `n1-highmem-8` | 8 | 52GB | Data processing |
+
+See [GCP machine types](https://cloud.google.com/compute/docs/machine-types) for more.
+
+## Installed Components
+
+- **cert-manager v1.19.2**: Automatic TLS certificates
+- **ingress-nginx v4.14.1**: Load balancer and routing
+- **Static IP**: For stable ingress access
+
+## Remote State Backend (Optional)
+
+Store state in Google Cloud Storage for team collaboration.
+
+### 1. Create State Bucket
+
+```bash
+gcloud storage buckets create gs://your-tf-state-bucket \
+  --location=US \
+  --uniform-bucket-level-access
+```
+
+### 2. Configure Backend
+
+Uncomment the backend block in `backend.tf`:
+
+```hcl
+terraform {
+    backend "gcs" {
+        bucket = "your-tf-state-bucket"
+        prefix = "terraform/state/production"
+    }
+}
+```
+
+### 3. Migrate State
+
+```bash
+tofu init -migrate-state
+```
+
+## Troubleshooting
+
+**Check cluster status:**
+```bash
+kubectl get nodes
+kubectl top nodes
+```
+
+**Ingress not ready:**
+```bash
+kubectl get svc -n ingress-nginx
+# Wait 2-3 minutes for EXTERNAL-IP to appear
+```
+
+**Authentication issues:**
+```bash
+gcloud auth application-default login
+gcloud container clusters get-credentials k8seed-labs-cluster --zone=us-central1-f
+```
+
+## Cleanup
+
+```bash
+tofu destroy
+```
+
+Manual cleanup if needed:
+```bash
+gcloud container clusters delete k8seed-labs-cluster --zone=us-central1-f --quiet
+```
+
+## Cost Optimization
+
+- **Development**: Use `n1-standard-2`, set `min_node_count = 0`, delete when idle
+- **Production**: Use `n1-standard-4` or higher, enable autoscaling
+- **Estimated costs** (us-central1):
+  - n1-standard-4: ~$140/month per node
+  - n1-highmem-8: ~$350/month per node
+
+Use [GCP Pricing Calculator](https://cloud.google.com/products/calculator) for estimates.
