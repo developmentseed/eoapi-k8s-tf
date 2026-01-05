@@ -1,40 +1,168 @@
-### Terraform Installation
-0. cd terraform/aws
+# AWS Elastic Kubernetes Service (EKS)
 
-1. install `tfenv` to manage multiple versions: [https://github.com/tfutils/tfenv](https://github.com/tfutils/tfenv)
+OpenTofu/Terraform configuration for AWS EKS with autoscaling.
 
-2. our `main.tf` file has a `required_version = "1.7.4"` so install that:
-   ```bash
-   $ tfenv list
-    1.1.5
-    1.1.4
-   ```
+## Prerequisites
 
-3. `tfenv install 1.7.4`
+1. **AWS CLI** configured with appropriate credentials
+2. **AWS Profile** set up with permissions for EKS, VPC, IAM, and S3
+3. **OpenTofu** 1.11.0 or later installed via [tofuenv](https://github.com/tofuutils/tofuenv)
 
-4. `tfenv use 1.7.4`
+### Install OpenTofu
 
-###  Terraform Init and Workspaces
+```bash
+# Install tofuenv
+# Follow: https://github.com/tofuutils/tofuenv
 
-0. choose a name for your project that you'll use for the TF `workspace` name, variable filename and backend-config name. 
-for the purposes of the rest of this walkthrough we'll call it `example-dev`  
+# Install OpenTofu 1.11.2+
+tofuenv install 1.11.2
+tofuenv use 1.11.2
+```
 
-1. copy the `backend-configs/example.tfbackend` to `backend-cofnigs/example-dev.tfbackend`. this is the file that sets
-up where your terraform state will be used in s3
+## Deployment
 
-2. in that file change the `bucket` value to be a unique bucket name. Leave the `key = terraform` as is. Choose a `region` for your bucket
+### 1. Prepare Workspace
 
-3. create the s3 bucket manually or via `aws-cli` for that region and bucket name
+Choose a workspace name (e.g., `example-dev`) for your deployment:
 
-4. initialize terraform and the state: `AWS_PROFILE=(profile-name) terraform init -reconfigure -backend-config backend-configs/example-dev.tfbackend `
+```bash
+cd tf/aws
+```
 
-5. finally, create a workspace `AWS_PROFILE=(profile-name) terraform workspace create example-dev`
+### 2. Configure Remote State
 
+Create backend configuration for storing Terraform state in S3:
 
-### Terraform Plan and Apply
+```bash
+cp backend-configs/example.tfbackend backend-configs/example-dev.tfbackend
+# Edit backend-configs/example-dev.tfbackend with your S3 bucket details
+```
 
-0. cp `vars/example.tfvars` to your `vars/example-dev.tfvars` and make the changes you will need
+In `backend-configs/example-dev.tfbackend`, set:
+- `bucket` - Unique S3 bucket name for state storage
+- `region` - AWS region for the bucket
+- `key` - Leave as `terraform`
 
-1. `AWS_PROFILE=(profile-name) terraform plan --var-file=vars/example-dev.tfvars`
+Create the S3 bucket:
 
-3. `AWS_PRFILE=(profile-name) terraform apply --var-file=vars/example-dev.tfvars`
+```bash
+aws s3 mb s3://your-bucket-name --region us-west-2
+```
+
+### 3. Initialize OpenTofu
+
+```bash
+AWS_PROFILE=your-profile tofu init -reconfigure -backend-config backend-configs/example-dev.tfbackend
+AWS_PROFILE=your-profile tofu workspace new example-dev
+```
+
+### 4. Configure Variables
+
+```bash
+cp vars/example.tfvars vars/example-dev.tfvars
+# Edit vars/example-dev.tfvars with your configuration
+```
+
+### 5. Deploy Infrastructure
+
+```bash
+AWS_PROFILE=your-profile tofu plan --var-file=vars/example-dev.tfvars
+AWS_PROFILE=your-profile tofu apply --var-file=vars/example-dev.tfvars
+```
+
+### 6. Access Cluster
+
+```bash
+aws eks update-kubeconfig --name eoapi-v2 --region us-west-2 --profile your-profile
+kubectl get nodes
+```
+
+### 7. Install eoAPI
+
+Install the PostgreSQL operator:
+
+```bash
+helm upgrade --install \
+  --set disable_check_for_upgrades=true pgo \
+  oci://registry.developers.crunchydata.com/crunchydata/pgo \
+  --version 5.7.4
+```
+
+Add the eoAPI helm repository:
+
+```bash
+helm repo add eoapi https://devseed.com/eoapi-k8s/
+```
+
+Get your current git SHA:
+
+```bash
+export GITSHA=$(git rev-parse HEAD | cut -c1-10)
+```
+
+Install eoAPI:
+
+```bash
+helm upgrade --install \
+  --namespace eoapi \
+  --create-namespace \
+  --set gitSha=$GITSHA \
+  eoapi eoapi/eoapi
+```
+
+## Configuration
+
+### Essential Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `region` | AWS region | `us-west-2` |
+| `cluster_name` | Cluster name (suffixed with cluster_version) | `eoapi` |
+| `cluster_version` | Version suffix for cluster name | `v2` |
+| `instance_type` | EC2 instance type | `t3.xlarge` |
+| `enable_efs` | Enable EFS storage | `false` |
+| `bucket_names` | S3 bucket names for data storage | `[]` |
+| `prometheus_hostname` | Prometheus endpoint (optional) | `""` |
+
+### Instance Types for Load Testing
+
+| Instance Type | vCPU | RAM | Best For |
+|---------------|------|-----|----------|
+| `t3.large` | 2 | 8GB | Small workloads, dev/test |
+| `t3.xlarge` | 4 | 16GB | Medium workloads |
+| `t3.2xlarge` | 8 | 32GB | Large workloads |
+
+## Troubleshooting
+
+**Check cluster status:**
+```bash
+AWS_PROFILE=your-profile aws eks describe-cluster --name eoapi-v2 --region us-west-2
+kubectl get nodes
+```
+
+**View autoscaling:**
+```bash
+kubectl top nodes
+kubectl get nodes -o wide
+```
+
+**Update kubeconfig:**
+```bash
+aws eks update-kubeconfig --name eoapi-v2 --region us-west-2 --profile your-profile
+```
+
+## Cleanup
+
+```bash
+AWS_PROFILE=your-profile tofu destroy --var-file=vars/example-dev.tfvars
+```
+
+> **Warning:** This will permanently delete all resources. Ensure you have backups of any important data.
+
+## Cost Optimization
+
+- Start with `t3.xlarge` nodes for balanced performance
+- Use spot instances for non-production workloads
+- Enable cluster autoscaling to minimize idle costs
+- Delete cluster when not in use: `tofu destroy`
+- Review AWS Cost Explorer regularly
