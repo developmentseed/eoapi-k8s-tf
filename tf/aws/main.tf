@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.7.4"
+  required_version = ">= 1.11.0"
 
   # you need to pass this on
   # `terraform init -backend-config=./backend-configs/<name>.tfbackend`
@@ -8,7 +8,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.8"
+      version = "~> 6.0"
     }
   }
 }

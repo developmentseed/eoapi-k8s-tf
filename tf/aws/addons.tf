@@ -31,7 +31,7 @@ resource "aws_eks_addon" "ebs_provisioner" {
   addon_name                  = "aws-ebs-csi-driver"
   # Fetched version for current version from
   # eksctl utils describe-addon-versions --kubernetes-version <kubernetes-version>
-  addon_version               = "v1.32.0-eksbuild.1"
+  addon_version               = "v1.54.0-eksbuild.1"
   resolve_conflicts_on_create = "OVERWRITE"
   service_account_role_arn  = aws_iam_role.ebs_provisioner.arn
   depends_on = [
@@ -58,7 +58,7 @@ resource "aws_eks_addon" "efs_provisioner" {
   addon_name                  = "aws-efs-csi-driver"
   # Fetch the most recent version for your current version of k8s
   # AWS_PROFILE=<your-profile> eksctl utils describe-addon-versions --kubernetes-version 1.27 -v0 | jq '.Addons[] | select(.AddonName == "aws-efs-csi-driver") | .AddonVersions[0]'
-  addon_version               = "v1.7.0-eksbuild.1"
+  addon_version               = "v2.2.0-eksbuild.1"
   resolve_conflicts_on_create = "OVERWRITE"
   service_account_role_arn  = aws_iam_role.efs_provisioner[0].arn
   depends_on = [
