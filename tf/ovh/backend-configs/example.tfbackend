@@ -1,0 +1,12 @@
+# Remote State Backend Configuration
+# Copy to backend.tfbackend and fill in your values
+# Initialize with: tofu init -backend-config=backend-configs/backend.tfbackend
+
+endpoints = {
+  s3 = "https://s3.de.io.cloud.ovh.net/"  # Replace 'de' with your region (lowercase)
+}
+
+bucket     = "my-terraform-state"  # Name of your state bucket
+region     = "de"                  # Region of state bucket (lowercase)
+access_key = ""                    # S3 access key
+secret_key = ""                    # S3 secret key
