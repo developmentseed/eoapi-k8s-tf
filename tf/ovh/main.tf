@@ -43,6 +43,10 @@ resource "ovh_cloud_project_kube_nodepool" "workers" {
   autoscale      = true
   anti_affinity  = true
   monthly_billed = false
+
+  lifecycle {
+    ignore_changes = [desired_nodes]
+  }
 }
 
 # Configure Kubernetes provider using kubeconfig_attributes

@@ -21,7 +21,21 @@ Useful information:
 
 ## Deployment
 
-### 1. Configure Variables
+### Quick Start
+
+```bash
+cd tf/ovh
+cp vars/example.tfvars terraform.tfvars
+# Edit terraform.tfvars with your configuration
+source ../../../ovh-creds.sh
+./quickstart.sh apply
+```
+
+The quickstart script handles init, plan, and apply. See `./quickstart.sh` for more commands.
+
+### Manual Deployment
+
+#### 1. Configure Variables
 
 ```bash
 cd tf/ovh
@@ -29,15 +43,16 @@ cp vars/example.tfvars vars/testing.tfvars
 # Edit vars/testing.tfvars with your configuration
 ```
 
-### 2. Deploy Infrastructure
+#### 2. Deploy Infrastructure
 
 ```bash
 source ../../../ovh-creds.sh
 tofu init
+tofu plan --var-file=vars/testing.tfvars
 tofu apply --var-file=vars/testing.tfvars
 ```
 
-### 3. Access Cluster
+#### 3. Access Cluster
 
 ```bash
 tofu output -raw kubeconfig > kubeconfig.yaml
@@ -45,7 +60,7 @@ export KUBECONFIG=$(pwd)/kubeconfig.yaml
 kubectl get nodes
 ```
 
-### 4. Install eoAPI
+#### 4. Install eoAPI
 
 Install the PostgreSQL operator:
 
@@ -103,7 +118,7 @@ tofu output bucket_endpoint         # S3 endpoint URL
 |----------|-------------|---------|
 | `service_name` | OVH Cloud Project ID | *required* |
 | `cluster_name` | Cluster name | `eoapi` |
-| `region` | OVH region (GRA, SBG, BHS, WAW) | `GRA` |
+| `region` | OVH region (GRA, SBG, BHS, WAW, etc.) | `GRA` |
 | `node_flavor` | Instance type | `b2-7` |
 | `min_nodes` | Minimum nodes | `1` |
 | `max_nodes` | Maximum nodes (≤5 with anti-affinity) | `5` |
@@ -130,7 +145,7 @@ For minimal test deployments without storage:
 enable_object_storage = false
 ```
 
-## Remote State Backend (Optional)
+## Remote State Backend
 
 Store Terraform state in OVH Object Storage for team collaboration.
 
@@ -145,12 +160,18 @@ cp backend-configs/example.tfbackend backend-configs/backend.tfbackend
 # Edit backend-configs/backend.tfbackend with your bucket details
 ```
 
-### 3. Enable Backend
-
-Uncomment the backend block in `backend.tf`, then:
+### 3. Initialize with Backend
 
 ```bash
-tofu init -backend-config=backend-configs/backend.tfbackend -migrate-state
+tofu init -backend-config=backend-configs/backend.tfbackend
+```
+
+### Local State (Optional)
+
+To use local state instead, comment out the backend block in `backend.tf` and run:
+
+```bash
+tofu init -migrate-state
 ```
 
 ## Troubleshooting

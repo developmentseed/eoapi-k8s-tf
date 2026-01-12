@@ -1,7 +1,17 @@
 # OVH Object Storage Configuration
-# Note: OVH Object Storage containers are created automatically when you first upload
-# objects using S3 credentials. There is no Terraform resource to pre-create containers.
-# The container will be created on first use with the bucket_name specified in variables.
+
+# S3-compatible storage container
+resource "ovh_cloud_project_storage" "bucket" {
+  count = var.enable_object_storage ? 1 : 0
+
+  service_name = var.service_name
+  region_name  = var.bucket_region
+  name         = var.bucket_name
+
+  versioning {
+    status = "enabled"
+  }
+}
 
 # User for bucket access
 resource "ovh_cloud_project_user" "bucket_user" {
